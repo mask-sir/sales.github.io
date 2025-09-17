@@ -13,6 +13,8 @@
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <!-- Tone.js for sound effects -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <!-- Chart.js for diagrams -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -146,6 +148,7 @@
     let appState = { productDatabase: [], salesLedger: {}, currentMonthView: '' };
     let html5QrCode = null;
     let isAdmin = false;
+    let salesChart = null; 
 
     // --- DYNAMIC PAGE TEMPLATES (HTML generation) ---
     const getPageTemplate = (pageId) => {
@@ -167,9 +170,9 @@
                 </div></div>`,
             'stock': `<div class="glass-ui rounded-xl shadow-lg"><div class="p-4 sm:p-6 border-b border-white/20"><h3 class="text-2xl font-bold text-slate-800">Stock Overview</h3></div><div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Model</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">MM Mobiles</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Max</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Total</th></tr></thead><tbody id="stock-table-body" class="divide-y divide-slate-200/50"></tbody></table></div></div>`,
             'products': `<div class="glass-ui rounded-xl shadow-lg p-6 md:p-8"><h3 class="text-2xl font-bold mb-6 border-b border-white/20 pb-4">Manage Products</h3><form id="product-form" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"><div class="md:col-span-2"><label class="block text-sm font-medium text-slate-600 mb-1">Barcode</label><div class="flex"><input type="text" id="product-barcode" class="w-full p-2 bg-white/50 border-r-0 border border-white/30 rounded-l-lg" required><button type="button" id="product-scan-btn" class="bg-violet-600 text-white p-2 rounded-r-lg hover:bg-violet-700" title="Scan Barcode"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.375 6.375c3.512-3.512 9.213-3.512 12.725 0c3.512 3.512 3.512 9.213 0 12.725c-3.512 3.512-9.213 3.512-12.725 0c-3.512-3.512-3.512-9.213 0-12.725z M12 1.5v21 M1.5 12h21"></path></svg></button></div></div><div class="md:col-span-2"><label class="block text-sm font-medium text-slate-600 mb-1">Model Name</label><input type="text" id="product-model" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required></div><div><label class="block text-sm font-medium text-slate-600 mb-1">MRP (₹)</label><input type="number" id="product-mrp" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Incentive (₹)</label><input type="number" id="product-incentive" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required value="0" min="0"></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Stock (MM)</label><input type="number" id="product-stock-mm" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required value="0" min="0"></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Stock (Max)</label><input type="number" id="product-stock-max" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required value="0" min="0"></div><div class="md:col-span-2 flex justify-end"><button type="submit" class="brand-gradient text-white px-6 py-2 rounded-lg font-semibold">Add Product</button></div></form><div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Model</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Incentive</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">MM</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Max</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Actions</th></tr></thead><tbody id="product-table-body"></tbody></table></div></div>`,
-             'log-sale': `<div class="glass-ui rounded-xl shadow-lg p-6 md:p-8"><div class="flex justify-between items-center mb-6 border-b border-white/20 pb-4"><h3 class="text-2xl font-bold">Log a Sale</h3><div id="log-month-selector-container"></div></div><form id="sales-form" class="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label class="block text-sm font-medium text-slate-600 mb-1">Shop</label><select id="sale-shop" name="shop" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required><option value="" disabled selected>Select Shop</option><option value="MM">MM Mobiles</option><option value="Max">Max</option></select></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Barcode</label><div class="flex"><input type="text" id="sale-barcode" name="barcode" class="w-full p-2 bg-white/50 border-r-0 border border-white/30 rounded-l-lg" placeholder="Enter or Scan"><button type="button" id="sale-scan-btn" class="bg-violet-600 text-white p-2 hover:bg-violet-700" title="Scan Barcode"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.375 6.375c3.512-3.512 9.213-3.512 12.725 0c3.512 3.512 3.512 9.213 0 12.725c-3.512 3.512-9.213 3.512-12.725 0c-3.512-3.512-3.512-9.213 0-12.725z M12 1.5v21 M1.5 12h21"></path></svg></button><button type="button" id="fetch-btn" class="bg-slate-700 text-white px-4 rounded-r-lg font-semibold text-sm">Fetch</button></div></div><div class="md:col-span-2"><label class="block text-sm font-medium text-slate-600 mb-1">Model</label><input type="text" id="sale-model" name="model" class="w-full p-2 border rounded-lg bg-slate-100/50" readonly></div><div><label class="block text-sm font-medium text-slate-600 mb-1">MRP (₹)</label><input type="number" id="sale-mrp" name="mrp" class="w-full p-2 border rounded-lg bg-slate-100/50" readonly></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Date</label><input type="date" id="sale-date" name="date" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Mode of Payment</label><select id="sale-mode" name="mode" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required><option>CASH</option><option>BAJAJ</option><option>CARD</option><option>DMI</option></select></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Customer Name</label><input type="text" id="sale-name" name="name" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg"></div><div class="md:col-span-2 flex justify-end"><button type="submit" class="brand-gradient text-white px-6 py-2 rounded-lg font-semibold">Log This Sale</button></div></form></div>`,
-            'sales-data': `<div class="glass-ui rounded-xl shadow-lg"><div class="flex flex-wrap justify-between items-center p-4 sm:p-6 border-b border-white/20 gap-4"><div id="data-month-selector-container"></div><button id="export-btn" class="bg-green-600 text-white px-5 py-2 rounded-lg hover:bg-green-700 font-semibold flex items-center gap-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg><span>Export to XL</span></button></div><div class="grid grid-cols-1 md:grid-cols-2 p-4 sm:p-6 border-b border-white/20 gap-4"><div><h4 class="text-sm font-semibold text-slate-500">Total Sales for Period</h4><p id="sales-period-total" class="text-2xl font-bold text-pink-600">₹0.00</p></div><div><h4 class="text-sm font-semibold text-slate-500">Total Incentives for Period</h4><p id="incentives-period-total" class="text-2xl font-bold text-green-600">₹0.00</p></div></div><div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">SL</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Model</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Date</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">MRP</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Incentive</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Shop</th><th data-admin-only class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Actions</th></tr></thead><tbody id="sales-table-body" class="divide-y divide-slate-200/50"></tbody></table></div></div>`,
-            'report': `<div class="glass-ui rounded-xl shadow-lg p-6 md:p-8"><div class="flex justify-between items-center mb-6 border-b border-white/20 pb-4"><h3 class="text-2xl font-bold text-slate-800">Sales Report</h3><div id="report-month-selector-container"></div></div><div id="report-content"></div></div>`
+            'log-sale': `<div class="glass-ui rounded-xl shadow-lg p-6 md:p-8"><div class="flex justify-between items-center mb-6 border-b border-white/20 pb-4"><h3 class="text-2xl font-bold">Log a Sale</h3><div id="log-month-selector-container"></div></div><form id="sales-form" class="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label class="block text-sm font-medium text-slate-600 mb-1">Shop</label><select id="sale-shop" name="shop" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required><option value="" disabled selected>Select Shop</option><option value="MM">MM Mobiles</option><option value="Max">Max</option></select></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Barcode</label><div class="flex"><input type="text" id="sale-barcode" name="barcode" class="w-full p-2 bg-white/50 border-r-0 border border-white/30 rounded-l-lg" placeholder="Enter or Scan"><button type="button" id="sale-scan-btn" class="bg-violet-600 text-white p-2 hover:bg-violet-700" title="Scan Barcode"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.375 6.375c3.512-3.512 9.213-3.512 12.725 0c3.512 3.512 3.512 9.213 0 12.725c-3.512 3.512-9.213 3.512-12.725 0c-3.512-3.512-3.512-9.213 0-12.725z M12 1.5v21 M1.5 12h21"></path></svg></button><button type="button" id="fetch-btn" class="bg-slate-700 text-white px-4 rounded-r-lg font-semibold text-sm">Fetch</button></div></div><div class="md:col-span-2"><label class="block text-sm font-medium text-slate-600 mb-1">Model</label><input type="text" id="sale-model" name="model" class="w-full p-2 border rounded-lg bg-slate-100/50" readonly></div><div><label class="block text-sm font-medium text-slate-600 mb-1">MRP (₹)</label><input type="number" id="sale-mrp" name="mrp" class="w-full p-2 border rounded-lg bg-slate-100/50" readonly></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Date</label><input type="date" id="sale-date" name="date" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Mode of Payment</label><select id="sale-mode" name="mode" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required><option>CASH</option><option>BAJAJ</option><option>CARD</option><option>DMI</option></select></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Customer Name</label><input type="text" id="sale-name" name="name" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg"></div><div class="md:col-span-2 flex justify-end"><button type="submit" class="brand-gradient text-white px-6 py-2 rounded-lg font-semibold">Log This Sale</button></div></form></div>`,
+            'sales-data': `<div class="glass-ui rounded-xl shadow-lg"><div class="flex flex-wrap justify-between items-center p-4 sm:p-6 border-b border-white/20 gap-4"><div id="data-month-selector-container"></div><button id="export-btn" class="bg-green-600 text-white px-5 py-2 rounded-lg hover:bg-green-700 font-semibold flex items-center gap-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg><span>Export to XL</span></button></div><div class="grid grid-cols-1 md:grid-cols-2 p-4 sm:p-6 border-b border-white/20 gap-4"><div><h4 class="text-sm font-semibold text-slate-500">Total Sales for Period</h4><p id="sales-period-total" class="text-2xl font-bold text-pink-600">₹0.00</p></div><div><h4 class="text-sm font-semibold text-slate-500">Total Incentives for Period</h4><p id="incentives-period-total" class="text-2xl font-bold text-green-600">₹0.00</p></div></div><div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">SL</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Model</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Date</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">MRP</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Incentive</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Shop</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Actions</th></tr></thead><tbody id="sales-table-body" class="divide-y divide-slate-200/50"></tbody></table></div></div>`,
+            'report': `<div class="glass-ui rounded-xl shadow-lg p-6 md:p-8"><div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b border-white/20 pb-4 gap-4"><h3 class="text-2xl font-bold text-slate-800">Sales Report</h3><div id="report-month-selector-container"></div></div><div id="report-content"></div></div>`
         };
         return templates[pageId] || '';
     };
@@ -259,8 +262,23 @@
     }
     const renderStockPage = () => {
         const tableBody = document.getElementById('stock-table-body');
-        tableBody.innerHTML = appState.productDatabase.length === 0 ? `<tr><td colspan="4" class="text-center p-6 text-slate-500">No products.</td></tr>` : 
-            appState.productDatabase.map(p => `<tr><td class="p-3 text-sm font-medium text-slate-700">${p.model}</td><td class="p-3 text-sm"><div class="flex items-center gap-3"><button data-admin-only class="stock-btn" data-barcode="${p.barcode}" data-shop="MM" data-action="decr">-</button><span class="font-bold text-lg w-8 text-center">${p.stock_mm}</span><button data-admin-only class="stock-btn" data-barcode="${p.barcode}" data-shop="MM" data-action="incr">+</button></div></td><td class="p-3 text-sm"><div class="flex items-center gap-3"><button data-admin-only class="stock-btn" data-barcode="${p.barcode}" data-shop="Max" data-action="decr">-</button><span class="font-bold text-lg w-8 text-center">${p.stock_max}</span><button data-admin-only class="stock-btn" data-barcode="${p.barcode}" data-shop="Max" data-action="incr">+</button></div></td><td class="p-3 text-sm font-bold text-slate-600">${p.stock_mm + p.stock_max}</td></tr>`).join('');
+        const sortedProducts = [...appState.productDatabase].sort((a, b) => {
+            const totalStockA = a.stock_mm + a.stock_max;
+            const totalStockB = b.stock_mm + b.stock_max;
+            if (totalStockA === 0 && totalStockB > 0) return 1;
+            if (totalStockB === 0 && totalStockA > 0) return -1;
+            return a.mrp - b.mrp;
+        });
+        tableBody.innerHTML = sortedProducts.length === 0 
+            ? `<tr><td colspan="4" class="text-center p-6 text-slate-500">No products.</td></tr>` 
+            : sortedProducts.map(p => 
+                `<tr>
+                    <td class="p-3 text-sm font-medium text-slate-700">${p.model}</td>
+                    <td class="p-3 text-sm"><div class="flex items-center gap-3"><button data-admin-only class="stock-btn" data-barcode="${p.barcode}" data-shop="MM" data-action="decr">-</button><span class="font-bold text-lg w-8 text-center">${p.stock_mm}</span><button data-admin-only class="stock-btn" data-barcode="${p.barcode}" data-shop="MM" data-action="incr">+</button></div></td>
+                    <td class="p-3 text-sm"><div class="flex items-center gap-3"><button data-admin-only class="stock-btn" data-barcode="${p.barcode}" data-shop="Max" data-action="decr">-</button><span class="font-bold text-lg w-8 text-center">${p.stock_max}</span><button data-admin-only class="stock-btn" data-barcode="${p.barcode}" data-shop="Max" data-action="incr">+</button></div></td>
+                    <td class="p-3 text-sm font-bold text-slate-600">${p.stock_mm + p.stock_max}</td>
+                </tr>`
+            ).join('');
         tableBody.querySelectorAll('.stock-btn').forEach(btn => {
             btn.classList.add('w-8', 'h-8', 'flex', 'items-center', 'justify-center', 'bg-slate-200/50', 'text-slate-700', 'rounded-full', 'font-bold', 'text-lg', 'hover:bg-slate-300/50', 'transition-colors');
             btn.addEventListener('click', handleStockUpdate);
@@ -269,7 +287,22 @@
     const renderProductPage = () => {
         document.getElementById('product-scan-btn').addEventListener('click', () => startScanner('product-barcode'));
         const tableBody = document.getElementById('product-table-body');
-        tableBody.innerHTML = appState.productDatabase.map(p => `<tr><td class="p-3 text-sm">${p.model}</td><td class="p-3 text-sm font-semibold text-green-700">${formatCurrency(p.incentive)}</td><td class="p-3 text-sm font-bold">${p.stock_mm}</td><td class="p-3 text-sm font-bold">${p.stock_max}</td><td data-admin-only class="p-3 text-sm"><button class="text-red-500 hover:underline" data-barcode="${p.barcode}">Delete</button></td></tr>`).join('');
+        const sortedProducts = [...appState.productDatabase].sort((a, b) => {
+            const totalStockA = a.stock_mm + a.stock_max;
+            const totalStockB = b.stock_mm + b.stock_max;
+            if (totalStockA === 0 && totalStockB > 0) return 1;
+            if (totalStockB === 0 && totalStockA > 0) return -1;
+            return a.mrp - b.mrp;
+        });
+        tableBody.innerHTML = sortedProducts.map(p => 
+            `<tr>
+                <td class="p-3 text-sm">${p.model}</td>
+                <td class="p-3 text-sm font-semibold text-green-700">${formatCurrency(p.incentive)}</td>
+                <td class="p-3 text-sm font-bold">${p.stock_mm}</td>
+                <td class="p-3 text-sm font-bold">${p.stock_max}</td>
+                <td data-admin-only class="p-3 text-sm"><button class="text-red-500 hover:underline" data-barcode="${p.barcode}">Delete</button></td>
+            </tr>`
+        ).join('');
         tableBody.querySelectorAll('button[data-barcode]').forEach(btn => btn.addEventListener('click', deleteProduct));
         document.getElementById('product-form').addEventListener('submit', addProduct);
     }
@@ -291,8 +324,7 @@
         renderSalesTable();
         document.getElementById('export-btn').addEventListener('click', exportToExcel);
     }
-    const renderReportPage = () => { renderMonthSelector('report-month-selector-container', true); renderSalesReport(appState.currentMonthView); }
-    
+
     // --- DATABASE INTERACTIONS ---
     async function handleStockUpdate(e) {
         const { barcode, shop, action } = e.currentTarget.dataset;
@@ -338,7 +370,7 @@
     }
     async function deleteSale(e) {
         const saleId = e.target.dataset.id, monthKey = e.target.dataset.month;
-        if (!confirm('Delete this sale? Stock will be restored.')) return;
+        if (!confirm('Are you sure you want to delete this sale? This will restore stock count.')) return;
         const saleToDelete = appState.salesLedger[monthKey]?.sales.find(s => s.id == saleId);
         if (!saleToDelete) return;
         const { error: deleteError } = await supabase.from('sales').delete().eq('id', saleId);
@@ -348,7 +380,9 @@
             const stockField = saleToDelete.shop === 'MM' ? 'stock_mm' : 'stock_max';
             await supabase.from('products').update({ [stockField]: product[stockField] + 1 }).eq('barcode', saleToDelete.barcode);
         }
-        await fetchInitialData(); renderSalesTable(); updateAdminUI();
+        await fetchInitialData(); 
+        renderSalesTable(); 
+        updateAdminUI();
     }
 
     // --- RENDER TABLES AND SELECTORS ---
@@ -366,27 +400,114 @@
             <button data-admin-only id="add-month-btn" class="ml-2 bg-slate-700 text-white p-2 rounded-lg hover:bg-slate-800 text-sm" title="Add New Month">+</button>`;
         const selector = document.getElementById(`month-selector-${containerId}`);
         selector.value = appState.currentMonthView;
-        selector.addEventListener('change', e => { appState.currentMonthView = e.target.value; showPage(document.querySelector('.page:not(.hidden)').id.replace('page-', '')); });
+        selector.addEventListener('change', e => {
+            appState.currentMonthView = e.target.value;
+            const currentPageId = document.querySelector('.page:not(.hidden)').id.replace('page-', '');
+            showPage(currentPageId);
+        });
         document.getElementById('add-month-btn')?.addEventListener('click', () => newMonthModal.classList.remove('hidden'));
     }
     const renderSalesTable = () => {
         const tableBody = document.getElementById('sales-table-body');
         let salesToDisplay = [];
-        if (appState.currentMonthView === 'all-time') { salesToDisplay = Object.entries(appState.salesLedger).flatMap(([monthKey, monthData]) => monthData.sales.map(sale => ({...sale, monthKey})));
-        } else if (appState.salesLedger[appState.currentMonthView]) { salesToDisplay = appState.salesLedger[appState.currentMonthView].sales.map(sale => ({...sale, monthKey: appState.currentMonthView})); }
+        if (appState.currentMonthView === 'all-time') { 
+            salesToDisplay = Object.entries(appState.salesLedger).flatMap(([monthKey, monthData]) => monthData.sales.map(sale => ({...sale, monthKey})));
+        } else if (appState.salesLedger[appState.currentMonthView]) { 
+            salesToDisplay = appState.salesLedger[appState.currentMonthView].sales.map(sale => ({...sale, monthKey: appState.currentMonthView})); 
+        }
         document.getElementById('sales-period-total').textContent = formatCurrency(salesToDisplay.reduce((sum, s) => sum + s.mrp, 0));
         document.getElementById('incentives-period-total').textContent = formatCurrency(salesToDisplay.reduce((sum, s) => sum + (s.incentive || 0), 0));
-        tableBody.innerHTML = salesToDisplay.length === 0 ? `<tr><td colspan="9" class="text-center p-6 text-slate-500">No sales data.</td></tr>` : salesToDisplay.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((sale, index) => `<tr><td class="p-3 text-sm">${appState.currentMonthView === 'all-time' ? index + 1 : sale.sl}</td><td class="p-3 text-sm font-medium">${sale.model}</td><td class="p-3 text-sm">${sale.date}</td><td class="p-3 text-sm font-semibold">${formatCurrency(sale.mrp)}</td><td class="p-3 text-sm font-semibold text-green-700">${formatCurrency(sale.incentive || 0)}</td><td class="p-3 text-sm">${sale.shop}</td><td data-admin-only class="p-3 text-sm"><button class="text-red-500 hover:underline" data-id="${sale.id}" data-month="${sale.monthKey}">Delete</button></td></tr>`).join('');
-        tableBody.querySelectorAll('button').forEach(btn => btn.addEventListener('click', deleteSale));
+        
+        // **CORRECTION:** Sort by SL number ascendingly
+        salesToDisplay.sort((a, b) => a.sl - b.sl);
+
+        tableBody.innerHTML = salesToDisplay.length === 0 
+            ? `<tr><td colspan="7" class="text-center p-6 text-slate-500">No sales data for this period.</td></tr>` 
+            : salesToDisplay.map(sale => {
+                // **CORRECTION:** Conditionally add the delete button inside the map function
+                const adminActions = isAdmin 
+                    ? `<button class="delete-sale-btn text-red-500 hover:underline" data-id="${sale.id}" data-month="${sale.monthKey}">Delete</button>`
+                    : '';
+                
+                return `<tr>
+                    <td class="p-3 text-sm text-center">${sale.sl}</td>
+                    <td class="p-3 text-sm font-medium">${sale.model}</td>
+                    <td class="p-3 text-sm">${sale.date}</td>
+                    <td class="p-3 text-sm font-semibold">${formatCurrency(sale.mrp)}</td>
+                    <td class="p-3 text-sm font-semibold text-green-700">${formatCurrency(sale.incentive || 0)}</td>
+                    <td class="p-3 text-sm">${sale.shop}</td>
+                    <td class="p-3 text-sm">${adminActions}</td>
+                </tr>`;
+            }).join('');
+
+        tableBody.querySelectorAll('.delete-sale-btn').forEach(btn => btn.addEventListener('click', deleteSale));
+    }
+    const renderReportPage = () => {
+        renderMonthSelector('report-month-selector-container', true);
+        renderSalesReport(appState.currentMonthView);
     }
     const renderSalesReport = (monthKey) => {
         const reportContent = document.getElementById('report-content');
-        if (monthKey === 'all-time' || !appState.salesLedger[monthKey] || appState.salesLedger[monthKey].sales.length === 0) { reportContent.innerHTML = `<div class="text-center py-12 text-slate-500"><p class="font-semibold text-lg">No sales data.</p><p>Select a month to view its report.</p></div>`; return; }
+        if (salesChart) {
+            salesChart.destroy();
+            salesChart = null;
+        }
+        if (monthKey === 'all-time' || !appState.salesLedger[monthKey] || appState.salesLedger[monthKey].sales.length === 0) {
+            reportContent.innerHTML = `<div class="text-center py-12 text-slate-500"><p class="font-semibold text-lg">No sales data.</p><p>Select a month to view its report.</p></div>`;
+            return;
+        }
         const sales = appState.salesLedger[monthKey].sales;
-        const totalRevenue = sales.reduce((sum, s) => sum + s.mrp, 0), totalIncentives = sales.reduce((sum, s) => sum + (s.incentive || 0), 0), unitsSold = sales.length;
+        const totalRevenue = sales.reduce((sum, s) => sum + s.mrp, 0);
+        const totalIncentives = sales.reduce((sum, s) => sum + (s.incentive || 0), 0);
+        const unitsSold = sales.length;
         const modelCounts = sales.reduce((acc, s) => { acc[s.model] = (acc[s.model] || 0) + 1; return acc; }, {});
         const bestSeller = Object.keys(modelCounts).reduce((a, b) => modelCounts[a] > modelCounts[b] ? a : b, 'N/A');
-        reportContent.innerHTML = `<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8"><div class="p-4 bg-white/40 rounded-lg"><h4 class="text-sm font-semibold text-slate-500">Total Revenue</h4><p class="text-2xl font-bold">${formatCurrency(totalRevenue)}</p></div><div class="p-4 bg-white/40 rounded-lg"><h4 class="text-sm font-semibold text-slate-500">Total Incentives</h4><p class="text-2xl font-bold text-green-600">${formatCurrency(totalIncentives)}</p></div><div class="p-4 bg-white/40 rounded-lg"><h4 class="text-sm font-semibold text-slate-500">Units Sold</h4><p class="text-2xl font-bold">${unitsSold}</p></div><div class="p-4 bg-white/40 rounded-lg"><h4 class="text-sm font-semibold text-slate-500">Best Seller</h4><p class="text-lg font-bold truncate">${bestSeller}</p></div></div>`;
+        const salesByDate = sales.reduce((acc, sale) => {
+            const date = sale.date;
+            acc[date] = (acc[date] || 0) + sale.mrp;
+            return acc;
+        }, {});
+        const chartLabels = Object.keys(salesByDate).sort();
+        const chartData = chartLabels.map(date => salesByDate[date]);
+        reportContent.innerHTML = `
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div class="p-4 bg-white/40 rounded-lg"><h4 class="text-sm font-semibold text-slate-500">Total Revenue</h4><p class="text-xl md:text-2xl font-bold">${formatCurrency(totalRevenue)}</p></div>
+                <div class="p-4 bg-white/40 rounded-lg"><h4 class="text-sm font-semibold text-slate-500">Total Incentives</h4><p class="text-xl md:text-2xl font-bold text-green-600">${formatCurrency(totalIncentives)}</p></div>
+                <div class="p-4 bg-white/40 rounded-lg"><h4 class="text-sm font-semibold text-slate-500">Units Sold</h4><p class="text-xl md:text-2xl font-bold">${unitsSold}</p></div>
+                <div class="p-4 bg-white/40 rounded-lg"><h4 class="text-sm font-semibold text-slate-500">Best Seller</h4><p class="text-md md:text-lg font-bold truncate">${bestSeller}</p></div>
+            </div>
+            <div class="mt-8">
+                <h4 class="text-xl font-bold text-slate-700 mb-4">Daily Sales Volume</h4>
+                <div style="height: 300px;">
+                    <canvas id="daily-sales-chart"></canvas>
+                </div>
+            </div>`;
+        const ctx = document.getElementById('daily-sales-chart').getContext('2d');
+        salesChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    label: 'Daily Sales',
+                    data: chartData,
+                    backgroundColor: 'rgba(236, 72, 153, 0.6)',
+                    borderColor: 'rgba(236, 72, 153, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { callback: function(value) { return '₹' + value / 1000 + 'k'; } } },
+                    x: { ticks: { maxRotation: 70, minRotation: 45 } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: function(context) { return `Sales: ${formatCurrency(context.parsed.y)}`; } } }
+                }
+            }
+        });
     }
     const exportToExcel = () => {
         let salesToExport = [];
@@ -440,11 +561,7 @@
     logoutBtn.addEventListener('click', () => supabase.auth.signOut());
     hamburgerBtn.addEventListener('click', toggleSidebar);
     sidebarOverlay.addEventListener('click', toggleSidebar);
-    mainNav.addEventListener('click', (e) => {
-        if (e.target.closest('a') && window.innerWidth < 768) {
-            toggleSidebar();
-        }
-    });
+    mainNav.addEventListener('click', (e) => { if (e.target.closest('a') && window.innerWidth < 768) { toggleSidebar(); } });
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault(); loginError.textContent = '';
         const { error } = await supabase.auth.signInWithPassword({ email: document.getElementById('email').value, password: document.getElementById('password').value });
