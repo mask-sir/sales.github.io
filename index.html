@@ -145,29 +145,53 @@
     const sidebarOverlay = document.getElementById('sidebar-overlay');
     
     // --- App State ---
-    let appState = { productDatabase: [], salesLedger: {}, currentMonthView: '' };
+    let appState = { productDatabase: [], salesLedger: {}, currentMonthView: '', currentTarget: 0 };
     let html5QrCode = null;
     let isAdmin = false;
     let salesChart = null; 
+    let homeSalesChart = null;
 
     // --- DYNAMIC PAGE TEMPLATES (HTML generation) ---
     const getPageTemplate = (pageId) => {
         const templates = {
             'home': `
-                <h2 class="text-3xl font-bold text-slate-800 mb-2">Dashboard</h2><p class="text-slate-500 mb-8">Live overview of your sales and stock.</p>
-                <div class="glass-ui rounded-xl shadow-lg p-6 mb-8 text-center border border-slate-200/75"><h3 class="font-semibold text-slate-500 text-lg">All-Time Sales Value</h3><p id="all-time-sales" class="text-5xl font-extrabold text-transparent bg-clip-text brand-gradient mt-2">₹0.00</p></div>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <div class="glass-ui rounded-xl shadow-lg p-5 border border-slate-200/75"><h3 class="font-semibold text-slate-500">Sales (Month)</h3><p id="month-sales" class="text-2xl font-bold text-pink-600 mt-2">₹0.00</p></div>
-                    <div class="glass-ui rounded-xl shadow-lg p-5 border border-slate-200/75"><h3 class="font-semibold text-slate-500">Incentives (Month)</h3><p id="month-incentives" class="text-2xl font-bold text-green-600 mt-2">₹0.00</p></div>
-                    <div class="glass-ui rounded-xl shadow-lg p-5 border border-slate-200/75"><h3 class="font-semibold text-slate-500">Stock (MM)</h3><p id="total-stock-mm" class="text-2xl font-bold text-sky-600 mt-2">0</p></div>
-                    <div class="glass-ui rounded-xl shadow-lg p-5 border border-slate-200/75"><h3 class="font-semibold text-slate-500">Stock (Max)</h3><p id="total-stock-max" class="text-2xl font-bold text-teal-600 mt-2">0</p></div>
+                <div class="mb-8">
+                    <h2 id="greeting" class="text-3xl font-bold text-slate-800">Good Morning</h2>
+                    <p id="current-date" class="text-slate-500">Let's check today's sales stats.</p>
                 </div>
-                <div data-admin-only class="glass-ui rounded-xl shadow-lg p-6 border border-slate-200/75"><h3 class="text-xl font-bold mb-4">Quick Actions</h3><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="quick-actions">
-                    <a href="#log-sale" class="nav-card text-center p-6 bg-pink-50 text-pink-700 rounded-lg hover:bg-pink-100 transition-colors"><h4 class="text-lg font-bold">Log a Sale</h4></a>
-                    <a href="#stock" class="nav-card text-center p-6 bg-sky-50 text-sky-700 rounded-lg hover:bg-sky-100 transition-colors"><h4 class="text-lg font-bold">Update Stock</h4></a>
-                    <a href="#products" class="nav-card text-center p-6 bg-violet-50 text-violet-700 rounded-lg hover:bg-violet-100 transition-colors"><h4 class="text-lg font-bold">Add Product</h4></a>
-                    <a href="#report" class="nav-card text-center p-6 bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors"><h4 class="text-lg font-bold">View Reports</h4></a>
-                </div></div>`,
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Main Content -->
+                    <div class="lg:col-span-2 space-y-6">
+                         <div class="glass-ui rounded-xl p-6 border border-slate-200/75">
+                            <h3 class="text-xl font-bold text-slate-700 mb-4">Monthly Sales Performance</h3>
+                            <div style="height: 280px;"><canvas id="home-sales-chart"></canvas></div>
+                        </div>
+                    </div>
+                    <!-- Side Content -->
+                    <div class="space-y-6">
+                        <div class="glass-ui rounded-xl p-6 border border-slate-200/75">
+                            <h3 class="text-xl font-bold mb-4">Monthly Target</h3>
+                            <div id="target-content"></div>
+                            <form id="target-form" class="mt-4 hidden">
+                                <label class="text-sm font-medium text-slate-600">Set Target for <span id="target-month-name"></span></label>
+                                <div class="flex gap-2 mt-1">
+                                    <input type="number" id="target-input" placeholder="e.g., 500000" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg">
+                                    <button type="submit" class="brand-gradient text-white px-4 rounded-lg font-semibold">Set</button>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="glass-ui rounded-xl p-6 border border-slate-200/75" id="quick-actions-container">
+                            <h3 class="text-xl font-bold mb-4">Quick Actions</h3>
+                            <div class="grid grid-cols-2 gap-4" id="quick-actions">
+                                <a href="#log-sale" class="nav-card text-center p-4 bg-pink-50 text-pink-700 rounded-lg hover:bg-pink-100 transition-colors flex flex-col items-center justify-center gap-2"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><h4 class="font-bold text-sm">Log Sale</h4></a>
+                                <a href="#stock" class="nav-card text-center p-4 bg-sky-50 text-sky-700 rounded-lg hover:bg-sky-100 transition-colors flex flex-col items-center justify-center gap-2"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg><h4 class="font-bold text-sm">Stock</h4></a>
+                                <a href="#products" class="nav-card text-center p-4 bg-violet-50 text-violet-700 rounded-lg hover:bg-violet-100 transition-colors flex flex-col items-center justify-center gap-2"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg><h4 class="font-bold text-sm">Products</h4></a>
+                                <a href="#report" class="nav-card text-center p-4 bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors flex flex-col items-center justify-center gap-2"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg><h4 class="font-bold text-sm">Reports</h4></a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `,
             'stock': `<div class="glass-ui rounded-xl shadow-lg"><div class="p-4 sm:p-6 border-b border-white/20"><h3 class="text-2xl font-bold text-slate-800">Stock Overview</h3></div><div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Model</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">MM Mobiles</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Max</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Total</th></tr></thead><tbody id="stock-table-body" class="divide-y divide-slate-200/50"></tbody></table></div></div>`,
             'products': `<div class="glass-ui rounded-xl shadow-lg p-6 md:p-8"><h3 class="text-2xl font-bold mb-6 border-b border-white/20 pb-4">Manage Products</h3><form id="product-form" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"><div class="md:col-span-2"><label class="block text-sm font-medium text-slate-600 mb-1">Barcode</label><div class="flex"><input type="text" id="product-barcode" class="w-full p-2 bg-white/50 border-r-0 border border-white/30 rounded-l-lg" required><button type="button" id="product-scan-btn" class="bg-violet-600 text-white p-2 rounded-r-lg hover:bg-violet-700" title="Scan Barcode"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.375 6.375c3.512-3.512 9.213-3.512 12.725 0c3.512 3.512 3.512 9.213 0 12.725c-3.512 3.512-9.213 3.512-12.725 0c-3.512-3.512-3.512-9.213 0-12.725z M12 1.5v21 M1.5 12h21"></path></svg></button></div></div><div class="md:col-span-2"><label class="block text-sm font-medium text-slate-600 mb-1">Model Name</label><input type="text" id="product-model" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required></div><div><label class="block text-sm font-medium text-slate-600 mb-1">MRP (₹)</label><input type="number" id="product-mrp" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Incentive (₹)</label><input type="number" id="product-incentive" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required value="0" min="0"></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Stock (MM)</label><input type="number" id="product-stock-mm" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required value="0" min="0"></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Stock (Max)</label><input type="number" id="product-stock-max" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required value="0" min="0"></div><div class="md:col-span-2 flex justify-end"><button type="submit" class="brand-gradient text-white px-6 py-2 rounded-lg font-semibold">Add Product</button></div></form><div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Model</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Incentive</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">MM</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Max</th><th class="p-3 text-left text-xs font-semibold text-slate-500 uppercase">Actions</th></tr></thead><tbody id="product-table-body"></tbody></table></div></div>`,
             'log-sale': `<div class="glass-ui rounded-xl shadow-lg p-6 md:p-8"><div class="flex justify-between items-center mb-6 border-b border-white/20 pb-4"><h3 class="text-2xl font-bold">Log a Sale</h3><div id="log-month-selector-container"></div></div><form id="sales-form" class="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label class="block text-sm font-medium text-slate-600 mb-1">Shop</label><select id="sale-shop" name="shop" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required><option value="" disabled selected>Select Shop</option><option value="MM">MM Mobiles</option><option value="Max">Max</option></select></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Barcode</label><div class="flex"><input type="text" id="sale-barcode" name="barcode" class="w-full p-2 bg-white/50 border-r-0 border border-white/30 rounded-l-lg" placeholder="Enter or Scan"><button type="button" id="sale-scan-btn" class="bg-violet-600 text-white p-2 hover:bg-violet-700" title="Scan Barcode"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.375 6.375c3.512-3.512 9.213-3.512 12.725 0c3.512 3.512 3.512 9.213 0 12.725c-3.512 3.512-9.213 3.512-12.725 0c-3.512-3.512-3.512-9.213 0-12.725z M12 1.5v21 M1.5 12h21"></path></svg></button><button type="button" id="fetch-btn" class="bg-slate-700 text-white px-4 rounded-r-lg font-semibold text-sm">Fetch</button></div></div><div class="md:col-span-2"><label class="block text-sm font-medium text-slate-600 mb-1">Model</label><input type="text" id="sale-model" name="model" class="w-full p-2 border rounded-lg bg-slate-100/50" readonly></div><div><label class="block text-sm font-medium text-slate-600 mb-1">MRP (₹)</label><input type="number" id="sale-mrp" name="mrp" class="w-full p-2 border rounded-lg bg-slate-100/50" readonly></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Date</label><input type="date" id="sale-date" name="date" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Mode of Payment</label><select id="sale-mode" name="mode" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg" required><option>CASH</option><option>BAJAJ</option><option>CARD</option><option>DMI</option></select></div><div><label class="block text-sm font-medium text-slate-600 mb-1">Customer Name</label><input type="text" id="sale-name" name="name" class="w-full p-2 bg-white/50 border border-white/30 rounded-lg"></div><div class="md:col-span-2 flex justify-end"><button type="submit" class="brand-gradient text-white px-6 py-2 rounded-lg font-semibold">Log This Sale</button></div></form></div>`,
@@ -202,6 +226,7 @@
         const { data: products, error: productError } = await supabase.from('products').select('*').order('model');
         if (productError) throw productError;
         appState.productDatabase = products;
+        
         loadingText.textContent = 'Fetching sales records...';
         const { data: sales, error: salesError } = await supabase.from('sales').select('*').order('date', { ascending: false });
         if (salesError) throw salesError;
@@ -210,7 +235,7 @@
             const monthKey = sale.date.substring(0, 7);
             if (!appState.salesLedger[monthKey]) {
                 const saleDate = new Date(sale.date);
-                const monthName = new Date(saleDate.getFullYear(), saleDate.getMonth(), 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+                const monthName = new Date(saleDate.getFullYear(), saleDate.getMonth(), 1).toLocaleString('default', { month: 'short', year: 'numeric' });
                 appState.salesLedger[monthKey] = { name: monthName, sales: [] };
             }
             appState.salesLedger[monthKey].sales.push(sale);
@@ -220,6 +245,15 @@
         }
         const monthKeys = Object.keys(appState.salesLedger);
         appState.currentMonthView = monthKeys.length > 0 ? monthKeys.sort().reverse()[0] : 'all-time';
+
+        loadingText.textContent = 'Fetching targets...';
+        const currentMonthKey = new Date().toISOString().substring(0, 7);
+        const { data: targetData, error: targetError } = await supabase.from('targets').select('amount').eq('month_key', currentMonthKey).single();
+        if (targetData) {
+            appState.currentTarget = targetData.amount;
+        } else {
+            appState.currentTarget = 0;
+        }
     }
 
     // --- BARCODE SCANNER ---
@@ -246,18 +280,73 @@
 
     // --- RENDER FUNCTIONS ---
     const renderHomePage = () => {
-        const allTimeSales = Object.values(appState.salesLedger).flatMap(m => m.sales).reduce((sum, s) => sum + s.mrp, 0);
-        document.getElementById('all-time-sales').textContent = formatCurrency(allTimeSales);
-        let monthKey = appState.currentMonthView === 'all-time' ? (Object.keys(appState.salesLedger).sort().reverse()[0] || null) : appState.currentMonthView;
-        const monthSalesData = (monthKey && appState.salesLedger[monthKey]?.sales) || [];
-        const monthSales = monthSalesData.reduce((sum, s) => sum + s.mrp, 0);
-        const monthIncentives = monthSalesData.reduce((sum, s) => sum + (s.incentive || 0), 0);
-        const stockMM = appState.productDatabase.reduce((sum, p) => sum + p.stock_mm, 0);
-        const stockMax = appState.productDatabase.reduce((sum, p) => sum + p.stock_max, 0);
-        document.getElementById('month-sales').textContent = formatCurrency(monthSales);
-        document.getElementById('month-incentives').textContent = formatCurrency(monthIncentives);
-        document.getElementById('total-stock-mm').textContent = stockMM;
-        document.getElementById('total-stock-max').textContent = stockMax;
+        // Greeting and Date
+        const hour = new Date().getHours();
+        document.getElementById('greeting').textContent = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
+        document.getElementById('current-date').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+        // --- Target Section ---
+        const targetContent = document.getElementById('target-content');
+        const targetForm = document.getElementById('target-form');
+        const currentMonthKey = new Date().toISOString().substring(0, 7);
+        const currentMonthName = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+        document.getElementById('target-month-name').textContent = currentMonthName;
+        
+        const monthSalesData = appState.salesLedger[currentMonthKey]?.sales || [];
+        const currentMonthSales = monthSalesData.reduce((sum, s) => sum + s.mrp, 0);
+        const targetAmount = appState.currentTarget;
+
+        if (targetAmount > 0) {
+            const percentage = Math.min((currentMonthSales / targetAmount) * 100, 100);
+            const remaining = Math.max(targetAmount - currentMonthSales, 0);
+            targetContent.innerHTML = `
+                <div class="flex justify-between text-sm font-semibold mb-1">
+                    <span>${formatCurrency(currentMonthSales)}</span>
+                    <span>${formatCurrency(targetAmount)}</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-4 relative overflow-hidden">
+                    <div class="brand-gradient h-4 rounded-full" style="width: ${percentage}%"></div>
+                    <div class="absolute top-0 bottom-0 border-r-2 border-slate-600/50" style="left: 90%;">
+                         <span class="absolute -bottom-5 text-xs font-bold text-slate-600" style="transform: translateX(-50%);">90%</span>
+                    </div>
+                </div>
+                <p class="text-center mt-2 font-semibold text-slate-600 text-sm">
+                    ${percentage >= 100 ? '🎉 Target achieved! 🎉' : `You need <span class="text-pink-600">${formatCurrency(remaining)}</span> to hit target.`}
+                </p>
+            `;
+        } else {
+            targetContent.innerHTML = '<p class="text-center text-slate-500 py-4">No target set for this month.</p>';
+        }
+
+        if (isAdmin) {
+            targetForm.classList.remove('hidden');
+            document.getElementById('quick-actions-container').classList.remove('hidden');
+        } else {
+            targetForm.classList.add('hidden');
+            document.getElementById('quick-actions-container').classList.add('hidden');
+        }
+
+        targetForm.addEventListener('submit', handleSetTarget);
+        
+        // --- Home Page Sales Chart ---
+        if (homeSalesChart) homeSalesChart.destroy();
+        const monthKeys = Object.keys(appState.salesLedger).sort();
+        const chartLabels = monthKeys.map(key => appState.salesLedger[key].name);
+        const chartData = monthKeys.map(key => {
+            return appState.salesLedger[key].sales.reduce((sum, s) => sum + s.mrp, 0);
+        });
+
+        const ctx = document.getElementById('home-sales-chart').getContext('2d');
+        homeSalesChart = new Chart(ctx, {
+            type: 'bar',
+            data: { labels: chartLabels, datasets: [{ label: 'Total Sales', data: chartData, backgroundColor: 'rgba(139, 92, 246, 0.6)', borderColor: 'rgba(139, 92, 246, 1)', borderWidth: 1, borderRadius: 4 }] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, grid: { drawBorder: false } }, x: { grid: { display: false } } },
+                plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1e293b', titleFont: { weight: 'bold'}, bodyFont: { size: 14 }, padding: 12, cornerRadius: 6, callbacks: { label: (context) => `Sales: ${formatCurrency(context.parsed.y)}` } } }
+            }
+        });
+
         document.getElementById('quick-actions')?.addEventListener('click', e => { if (e.target.closest('a')) window.location.hash = e.target.closest('a').hash; });
     }
     const renderStockPage = () => {
@@ -294,16 +383,21 @@
             if (totalStockB === 0 && totalStockA > 0) return -1;
             return a.mrp - b.mrp;
         });
-        tableBody.innerHTML = sortedProducts.map(p => 
-            `<tr>
+        tableBody.innerHTML = sortedProducts.map(p => {
+            const adminActions = isAdmin 
+                ? `<button class="delete-product-btn text-red-500 hover:underline" data-barcode="${p.barcode}">Delete</button>`
+                : '';
+            
+            return `<tr>
                 <td class="p-3 text-sm">${p.model}</td>
                 <td class="p-3 text-sm font-semibold text-green-700">${formatCurrency(p.incentive)}</td>
                 <td class="p-3 text-sm font-bold">${p.stock_mm}</td>
                 <td class="p-3 text-sm font-bold">${p.stock_max}</td>
-                <td data-admin-only class="p-3 text-sm"><button class="text-red-500 hover:underline" data-barcode="${p.barcode}">Delete</button></td>
-            </tr>`
-        ).join('');
-        tableBody.querySelectorAll('button[data-barcode]').forEach(btn => btn.addEventListener('click', deleteProduct));
+                <td class="p-3 text-sm">${adminActions}</td>
+            </tr>`;
+        }).join('');
+
+        tableBody.querySelectorAll('.delete-product-btn').forEach(btn => btn.addEventListener('click', deleteProduct));
         document.getElementById('product-form').addEventListener('submit', addProduct);
     }
     const renderLogSalePage = () => {
@@ -326,6 +420,26 @@
     }
 
     // --- DATABASE INTERACTIONS ---
+    async function handleSetTarget(e) {
+        e.preventDefault();
+        const input = document.getElementById('target-input');
+        const newTarget = parseInt(input.value, 10);
+        if (isNaN(newTarget) || newTarget < 0) {
+            showMessage("Please enter a valid target amount.");
+            return;
+        }
+        const currentMonthKey = new Date().toISOString().substring(0, 7);
+        const { error } = await supabase.from('targets').upsert({ month_key: currentMonthKey, amount: newTarget });
+
+        if (error) {
+            showMessage("Failed to set target. " + error.message);
+        } else {
+            appState.currentTarget = newTarget;
+            showMessage("Target updated successfully!");
+            renderHomePage();
+            updateAdminUI();
+        }
+    }
     async function handleStockUpdate(e) {
         const { barcode, shop, action } = e.currentTarget.dataset;
         const product = appState.productDatabase.find(p => p.barcode === barcode);
@@ -345,7 +459,7 @@
     }
     async function deleteProduct(e) {
         const barcode = e.target.dataset.barcode;
-        if (!confirm(`Delete product with barcode ${barcode}?`)) return;
+        if (!confirm(`Are you sure you want to delete this product?`)) return;
         const { error } = await supabase.from('products').delete().eq('barcode', barcode);
         if (error) showMessage('Failed to delete product: ' + error.message);
         else { appState.productDatabase = appState.productDatabase.filter(p => p.barcode !== barcode); renderProductPage(); updateAdminUI();}
@@ -418,13 +532,11 @@
         document.getElementById('sales-period-total').textContent = formatCurrency(salesToDisplay.reduce((sum, s) => sum + s.mrp, 0));
         document.getElementById('incentives-period-total').textContent = formatCurrency(salesToDisplay.reduce((sum, s) => sum + (s.incentive || 0), 0));
         
-        // **CORRECTION:** Sort by SL number ascendingly
         salesToDisplay.sort((a, b) => a.sl - b.sl);
 
         tableBody.innerHTML = salesToDisplay.length === 0 
             ? `<tr><td colspan="7" class="text-center p-6 text-slate-500">No sales data for this period.</td></tr>` 
             : salesToDisplay.map(sale => {
-                // **CORRECTION:** Conditionally add the delete button inside the map function
                 const adminActions = isAdmin 
                     ? `<button class="delete-sale-btn text-red-500 hover:underline" data-id="${sale.id}" data-month="${sale.monthKey}">Delete</button>`
                     : '';
